@@ -11,7 +11,8 @@ function load_area($fp) {
 
             $word = fread_word($fp);
 
-            if ($word == '$') break;
+            if ($word == '$')
+                break;
 
             //var_dump($word);
             switch ($word) {
@@ -187,11 +188,17 @@ function load_areadata($fp) {
 
 function load_mobs($fp) {
     $mobs = array();
-
+    $skipped = false;
     for (;;) {
-        $c = fread_letter($fp);
-        if ($c <> '#')
-            die(__LINE__);
+        if ( !$skipped )
+            $c = fread_letter($fp);
+
+        $skipped = false;
+
+        if ($c <> '#') {
+            debug_print_backtrace();
+            exit;
+        }
 
         $vnum = fread_number($fp);
         if ($vnum == 0) {
@@ -224,6 +231,17 @@ function load_mobs($fp) {
         fread_number($fp);
         fread_number($fp);
 
+        for (;;) {
+            $l = fread_letter($fp);
+            if ($l == '#') {
+                $skipped = true;
+                break;
+            }
+            if ($l == 'P') {
+                $mob->script = fread_eol($fp);
+            }
+        }
+
         //$mob->sex = fread_number($fp);
 
         $mobs[] = $mob;
@@ -242,8 +260,10 @@ function load_objs($fp) {
 
         $skipped = false;
 
-        if ($c <> '#')
-            die(__LINE__);
+        if ($c <> '#') {
+            debug_print_backtrace();
+            exit;
+        }
 
         $vnum = fread_number($fp);
         if ($vnum == 0) {
@@ -279,7 +299,7 @@ function load_objs($fp) {
                 $paf            = new stdClass();
                 $paf->type      = -1;
                 $paf->duration  = -1;
-                $paf->location  = fread_number($fp);
+                $paf->affect_type  = fread_number($fp);
                 $paf->modifier  = fread_number($fp);
                 $paf->bitvector = 0;
 
@@ -307,8 +327,10 @@ function load_rooms($fp) {
     for (;;) {
         $letter = fread_letter($fp);
 
-        if ($letter != '#')
-            die(__LINE__);
+        if ($letter != '#') {
+            debug_print_backtrace();
+            exit;
+        }
 
         $vnum = fread_number($fp);
         if ($vnum == 0)
@@ -367,3 +389,41 @@ function load_shops($fp) {
     // todo
 }
 
+function dump_area($area) {
+    if (!file_exists($area)) {
+        echo $area . ' file does not exist';
+        return;
+    }
+    $fp = fopen($area, 'r');
+    if ($fp == null)
+        die('can not open file');
+
+    $area = load_area($fp);
+    fclose($fp);
+
+    foreach ($area['objs'] as $obj) {
+        $str = sprintf('INSERT INTO objs (
+                    vnum, name, short_descr, description, action_desc, item_type,
+                    extra_flags, wear_flag, weight,cost
+                    )
+                    VALUES (%d, "%s", "%s", "%s", "%s",  %d, %d, %d, %d, %d);',
+                $obj->vnum, $obj->name, $obj->short_descr, $obj->description,
+                $obj->action_desc, $obj->item_type, $obj->extra_flags,
+                $obj->wear_flags, $obj->weight, $obj->cost
+        );
+        mysql_query($str) or print(mysql_error() . PHP_EOL);
+        printf('inserting %s' . PHP_EOL, $obj->name);
+
+
+        if (isset($obj->affected))
+            foreach ($obj->affected as $a) {
+                $str = sprintf('INSERT INTO objs_affects
+                        (obj_vnum, flag, modifier)
+                        VALUES
+                        (%d, %d, %d)
+                        ', $obj->vnum, $a->affect_type, $a->modifier
+                );
+                mysql_query($str);
+            }
+    }
+}

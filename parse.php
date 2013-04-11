@@ -5,51 +5,30 @@ include_once("db.php");
 <html lang="utf8">
     <body>
         <?php
+
+
         if (isset($argv[1]))
             $area = $argv[1];
         else
-            $area = 'D:\\thelostatlantis\\area\\olympus.are';
+            $area = 'D:\\thelostatlantis\\area\\area.lst';
 
         $conn = mysql_connect('localhost', 'root', '');
         mysql_set_charset('utf8', $conn);
         mysql_query('use la;');
+        mysql_query('delete from objs;');
+        mysql_query('delete from objs_affects;');
 
-        dump_area($area);
-//            mysql_query('delete from objs;');
-//            mysql_query('delete from objs_affects;');
+        $dir = dirname($area);
+        //dump_area($dir.'\\limbo.are');
+        //return;
 
-        function dump_area($area) {
-            if (!file_exists($area))
-                die('file does not exist');
-            $fp = fopen($area, 'r');
-            if ($fp == null)
-                die('can not open file');
+        $areas = file($area);
+        foreach ($areas as $area_file) {
+            $area_file = trim($area_file);
+            var_dump($area_file);
 
-            $area = load_area($fp);
-            fclose($fp);
-
-            foreach ($area['objs'] as $obj) {
-                $str = sprintf('INSERT INTO objs (
-                    vnum, name, short_descr, description, action_desc, item_type,
-                    extra_flags, wear_flag, weight,cost
-                    )
-                    VALUES (%d, "%s", "%s", "%s", "%s",  %d, %d, %d, %d, %d);', $obj->vnum, $obj->name, $obj->short_descr, $obj->description, $obj->action_desc, $obj->item_type, $obj->extra_flags, $obj->wear_flags, $obj->weight, $obj->cost
-                );
-                mysql_query($str) or print(mysql_error() . PHP_EOL);
-                printf('inserting %s'.PHP_EOL, $obj->name);
-
-
-                if (isset($obj->affected))
-                    foreach ($obj->affected as $a) {
-                        $str = sprintf('INSERT INTO objs_affects
-                        (obj_vnum, location, modifier)
-                        VALUES
-                        (%d, %d, %d)
-                        ', $obj->vnum, $a->location, $a->modifier
-                        );
-                        mysql_query($str);
-                    }
-            }
+            if (preg_match('/\w*\.are/', $area_file))
+                dump_area($dir.'\\'.$area_file);
         }
 
         echo 'done';
