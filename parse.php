@@ -18,9 +18,9 @@ include_once("db.php");
         mysql_query('delete from objs;');
         mysql_query('delete from objs_affects;');
 
-        $dir = dirname($area);
-        //dump_area($dir.'\\limbo.are');
-        //return;
+        $dir = dirname($area).'\\';
+        dump_area($dir.'mahntor.are');
+        return;
 
         $areas = file($area);
         foreach ($areas as $area_file) {
@@ -28,7 +28,7 @@ include_once("db.php");
             var_dump($area_file);
 
             if (preg_match('/\w*\.are/', $area_file))
-                dump_area($dir.'\\'.$area_file);
+                dump_area($dir.$area_file);
         }
 
         echo 'done';

@@ -286,8 +286,10 @@ function load_objs($fp) {
           $obj->trap_dam    = fread_number($fp);
           $obj->trap_charge = fread_number($fp);
          */
-        $line             = str_replace('~', '', fread_eol($fp));
-        $obj->values      = explode(' ', $line);
+        $obj->values[0]      = fread_string($fp);
+        $obj->values[1]      = fread_string($fp);
+        $obj->values[2]      = fread_string($fp);
+        $obj->values[3]      = fread_string($fp);
 
         $obj->weight       = fread_number($fp);
         $obj->cost         = fread_number($fp);
@@ -403,17 +405,35 @@ function dump_area($area) {
 
     foreach ($area['objs'] as $obj) {
         $str = sprintf('INSERT INTO objs (
-                    vnum, name, short_descr, description, action_desc, item_type,
-                    extra_flags, wear_flag, weight,cost
+                    vnum, name, short_descr, description, item_type,
+                    extra_flags, wear_flag, weight,cost, v0, v1, v2, v3
                     )
-                    VALUES (%d, "%s", "%s", "%s", "%s",  %d, %d, %d, %d, %d);',
+                    VALUES (%d, "%s", "%s", "%s", %d, %d, %d, %d, %d,
+                    "%s", "%s", "%s", "%s"
+                    );',
                 $obj->vnum, $obj->name, $obj->short_descr, $obj->description,
-                $obj->action_desc, $obj->item_type, $obj->extra_flags,
-                $obj->wear_flags, $obj->weight, $obj->cost
+                $obj->item_type, $obj->extra_flags,
+                $obj->wear_flags, $obj->weight, $obj->cost,
+                $obj->values[0],
+                $obj->values[1],
+                $obj->values[2],
+                $obj->values[3]
         );
-        mysql_query($str) or print(mysql_error() . PHP_EOL);
+        mysql_query($str) or die(mysql_error() . PHP_EOL.$str);
         printf('inserting %s' . PHP_EOL, $obj->name);
 
+
+        if (isset($obj->extra_desc))
+            foreach ($obj->extra_desc as $a) {
+                $str = sprintf('INSERT INTO objs_ed
+                        (obj_vnum, keyword, description)
+                        VALUES
+                        (%d, "%s", "%s")
+                        ', $obj->vnum, $a->keyword, mysql_real_escape_string($a->description)
+
+                );
+                mysql_query($str) or die(mysql_error() . PHP_EOL.$str);
+            }
 
         if (isset($obj->affected))
             foreach ($obj->affected as $a) {
@@ -423,7 +443,7 @@ function dump_area($area) {
                         (%d, %d, %d)
                         ', $obj->vnum, $a->affect_type, $a->modifier
                 );
-                mysql_query($str);
+                mysql_query($str) or die(mysql_error() . PHP_EOL.$str);
             }
     }
 }
