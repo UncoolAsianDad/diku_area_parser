@@ -187,10 +187,10 @@ function load_areadata($fp) {
 }
 
 function load_mobs($fp) {
-    $mobs = array();
+    $mobs    = array();
     $skipped = false;
     for (;;) {
-        if ( !$skipped )
+        if (!$skipped)
             $c = fread_letter($fp);
 
         $skipped = false;
@@ -280,16 +280,16 @@ function load_objs($fp) {
 
         $obj->item_type   = fread_number($fp);
         $obj->extra_flags = fread_number($fp);
-        $obj->wear_flags  = fread_number($fp);
+        $obj->wear_flag   = fread_number($fp);
         /*
           $obj->trap_eff    = fread_number($fp);
           $obj->trap_dam    = fread_number($fp);
           $obj->trap_charge = fread_number($fp);
          */
-        $obj->values[0]      = fread_string($fp);
-        $obj->values[1]      = fread_string($fp);
-        $obj->values[2]      = fread_string($fp);
-        $obj->values[3]      = fread_string($fp);
+        $obj->values[0]   = fread_string($fp);
+        $obj->values[1]   = fread_string($fp);
+        $obj->values[2]   = fread_string($fp);
+        $obj->values[3]   = fread_string($fp);
 
         $obj->weight       = fread_number($fp);
         $obj->cost         = fread_number($fp);
@@ -298,12 +298,12 @@ function load_objs($fp) {
         for (;;) {
             $letter = fread_letter($fp);
             if ($letter == 'A') {
-                $paf            = new stdClass();
-                $paf->type      = -1;
-                $paf->duration  = -1;
-                $paf->affect_type  = fread_number($fp);
-                $paf->modifier  = fread_number($fp);
-                $paf->bitvector = 0;
+                $paf              = new stdClass();
+                $paf->type        = -1;
+                $paf->duration    = -1;
+                $paf->affect_type = fread_number($fp);
+                $paf->modifier    = fread_number($fp);
+                $paf->bitvector   = 0;
 
                 $obj->affected[] = $paf;
             } else if ($letter == 'E') {
@@ -392,6 +392,8 @@ function load_shops($fp) {
 }
 
 function dump_area($area) {
+    global $pdo; // @var $pdo PDO
+
     if (!file_exists($area)) {
         echo $area . ' file does not exist';
         return;
@@ -404,46 +406,64 @@ function dump_area($area) {
     fclose($fp);
 
     foreach ($area['objs'] as $obj) {
-        $str = sprintf('INSERT INTO objs (
+
+        $str = 'INSERT INTO objs (
                     vnum, name, short_descr, description, item_type,
-                    extra_flags, wear_flag, weight,cost, v0, v1, v2, v3
-                    )
-                    VALUES (%d, "%s", "%s", "%s", %d, %d, %d, %d, %d,
-                    "%s", "%s", "%s", "%s"
-                    );',
-                $obj->vnum, $obj->name, $obj->short_descr, $obj->description,
-                $obj->item_type, $obj->extra_flags,
-                $obj->wear_flags, $obj->weight, $obj->cost,
-                $obj->values[0],
-                $obj->values[1],
-                $obj->values[2],
-                $obj->values[3]
-        );
-        mysql_query($str) or die(mysql_error() . PHP_EOL.$str);
+                    extra_flags, wear_flag, weight, cost,
+                    v0, v1, v2, v3
+                )
+                VALUES (:vnum, :name, :short, :descr, :item_type,
+                    :extra_flags, :wear_flag, :weight, :cost,
+                    :v0, :v1, :v2, :v3
+                );';
+
+        $stmt = $pdo->prepare($str); /* @var $stmt PDOStatement */
+        $stmt->bindparam(':vnum', $obj->vnum, PDO::PARAM_INT);
+        $stmt->bindparam(':name', $obj->name, PDO::PARAM_STR);
+        $stmt->bindparam(':short', $obj->short_descr, PDO::PARAM_STR);
+        $stmt->bindparam(':descr', $obj->description, PDO::PARAM_STR);
+        $stmt->bindparam(':item_type', $obj->item_type, PDO::PARAM_INT);
+
+        $stmt->bindparam(':extra_flags', $obj->extra_flags, PDO::PARAM_INT);
+        $stmt->bindparam(':wear_flag', $obj->wear_flag, PDO::PARAM_INT);
+        $stmt->bindparam(':weight', $obj->weight, PDO::PARAM_INT);
+        $stmt->bindparam(':cost', $obj->cost, PDO::PARAM_INT);
+
+        $stmt->bindparam(':v0', $obj->values[0], PDO::PARAM_STR);
+        $stmt->bindparam(':v1', $obj->values[1], PDO::PARAM_STR);
+        $stmt->bindparam(':v2', $obj->values[2], PDO::PARAM_STR);
+        $stmt->bindparam(':v3', $obj->values[3], PDO::PARAM_STR);
+
+        $stmt->execute() or die ($str.print_r($obj, true));
+
+
+        //mysql_query($str) or die(mysql_error() . PHP_EOL.$str);
         printf('inserting %s' . PHP_EOL, $obj->name);
 
 
         if (isset($obj->extra_desc))
             foreach ($obj->extra_desc as $a) {
-                $str = sprintf('INSERT INTO objs_ed
+                $stmt = $pdo->prepare('INSERT INTO objs_ed
                         (obj_vnum, keyword, description)
                         VALUES
-                        (%d, "%s", "%s")
-                        ', $obj->vnum, $a->keyword, mysql_real_escape_string($a->description)
-
-                );
-                mysql_query($str) or die(mysql_error() . PHP_EOL.$str);
+                        (:obj_vnum, :keyword, :description);');
+                $stmt->bindParam('obj_vnum', $obj->vnum, PDO::PARAM_INT);
+                $stmt->bindParam('keyword', $a->keyword, PDO::PARAM_STR);
+                $stmt->bindParam('description', $a->description, PDO::PARAM_STR);
+                $stmt->execute();
             }
 
         if (isset($obj->affected))
             foreach ($obj->affected as $a) {
-                $str = sprintf('INSERT INTO objs_affects
+                $stmt = $pdo->prepare('INSERT INTO objs_affects
                         (obj_vnum, flag, modifier)
                         VALUES
-                        (%d, %d, %d)
-                        ', $obj->vnum, $a->affect_type, $a->modifier
-                );
-                mysql_query($str) or die(mysql_error() . PHP_EOL.$str);
+                        (:obj_vnum, :flag, :modifier)');
+                $stmt->bindParam(':obj_vnum', $obj->vnum, PDO::PARAM_INT);
+                $stmt->bindParam(':flag', $a->affect_type, PDO::PARAM_INT);
+                $stmt->bindParam(':modifier', $a->modifier, PDO::PARAM_INT);
+                $stmt->execute();
+
             }
     }
 }
