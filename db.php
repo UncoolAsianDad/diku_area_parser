@@ -207,7 +207,7 @@ function load_mobs($fp) {
 
         $mob              = new stdClass();
         $mob->vnum        = $vnum;
-        $mob->player_name = fread_string($fp);
+        $mob->name        = fread_string($fp);
         $mob->short_descr = fread_string($fp);
         $mob->long_descr  = fread_string($fp);
         $mob->description = fread_string($fp);
@@ -345,7 +345,7 @@ function load_rooms($fp) {
         fread_number($fp);
         $room->room_flags  = fread_number($fp);
         $room->sector_type = fread_number($fp);
-        $room->lignt       = 0;
+        $room->light       = 0;
 
         for (;;) {
             $letter = fread_letter($fp);
@@ -391,23 +391,10 @@ function load_shops($fp) {
     // todo
 }
 
-function dump_area($area) {
-    global $pdo; // @var $pdo PDO
+function save_objs($objs, $pdo) {
 
-    if (!file_exists($area)) {
-        echo $area . ' file does not exist';
-        return;
-    }
-    $fp = fopen($area, 'r');
-    if ($fp == null)
-        die('can not open file');
-
-    $area = load_area($fp);
-    fclose($fp);
-
-    foreach ($area['objs'] as $obj) {
-
-        $str = 'INSERT INTO objs (
+    foreach ($objs as $obj) {
+        $str = 'INSERT INTO object (
                     vnum, name, short_descr, description, item_type,
                     extra_flags, wear_flag, weight, cost,
                     v0, v1, v2, v3
@@ -434,36 +421,124 @@ function dump_area($area) {
         $stmt->bindparam(':v2', $obj->values[2], PDO::PARAM_STR);
         $stmt->bindparam(':v3', $obj->values[3], PDO::PARAM_STR);
 
-        $stmt->execute() or die ($str.print_r($obj, true));
-
-
-        //mysql_query($str) or die(mysql_error() . PHP_EOL.$str);
-        printf('inserting %s' . PHP_EOL, $obj->name);
+        $stmt->execute() or die($str . print_r($obj, true));
 
 
         if (isset($obj->extra_desc))
             foreach ($obj->extra_desc as $a) {
-                $stmt = $pdo->prepare('INSERT INTO objs_ed
+                $stmt = $pdo->prepare('INSERT INTO object_eds
                         (obj_vnum, keyword, description)
                         VALUES
                         (:obj_vnum, :keyword, :description);');
                 $stmt->bindParam('obj_vnum', $obj->vnum, PDO::PARAM_INT);
                 $stmt->bindParam('keyword', $a->keyword, PDO::PARAM_STR);
                 $stmt->bindParam('description', $a->description, PDO::PARAM_STR);
-                $stmt->execute();
+                $stmt->execute() or die($str . print_r($obj, true));
             }
 
         if (isset($obj->affected))
             foreach ($obj->affected as $a) {
-                $stmt = $pdo->prepare('INSERT INTO objs_affects
+                $stmt = $pdo->prepare('INSERT INTO object_affects
                         (obj_vnum, flag, modifier)
                         VALUES
                         (:obj_vnum, :flag, :modifier)');
                 $stmt->bindParam(':obj_vnum', $obj->vnum, PDO::PARAM_INT);
                 $stmt->bindParam(':flag', $a->affect_type, PDO::PARAM_INT);
                 $stmt->bindParam(':modifier', $a->modifier, PDO::PARAM_INT);
-                $stmt->execute();
-
+                $stmt->execute() or die($str . print_r($obj, true));
             }
+
+        printf('inserting %s' . PHP_EOL, $obj->name);
     }
+}
+
+function save_rooms($rooms, $pdo) {
+
+    foreach ($rooms as $obj) {
+        $str = 'INSERT INTO room VALUES (
+            :vnum, :name, :descr,
+            :flags, :sector_type, :light
+        );';
+
+        $stmt = $pdo->prepare($str); /* @var $stmt PDOStatement */
+        $stmt->bindparam(':vnum', $obj->vnum, PDO::PARAM_INT);
+        $stmt->bindparam(':name', $obj->name, PDO::PARAM_STR);
+        $stmt->bindparam(':descr', $obj->description, PDO::PARAM_STR);
+
+        $stmt->bindparam(':flags', $obj->room_flags, PDO::PARAM_INT);
+        $stmt->bindparam(':sector_type', $obj->sector_type, PDO::PARAM_INT);
+        $stmt->bindparam(':light', $obj->light, PDO::PARAM_INT);
+
+        $stmt->execute() or die(print_r($stmt->errorInfo(), true) . $str . print_r($obj, true));
+
+        if (isset($obj->exit))
+            foreach ($obj->exit as $direction => $exit) {
+                $str  = 'INSERT INTO room_exits VALUES (
+                    :room_vnum, :to_room, :direction,
+                    :description, :keyword, :lock_vnum
+                );';
+                $stmt = $pdo->prepare($str);
+                $stmt->bindparam(':room_vnum', $obj->vnum, PDO::PARAM_INT);
+                $stmt->bindparam(':to_room', $exit->vnum, PDO::PARAM_STR);
+                $stmt->bindparam(':direction', $direction, PDO::PARAM_STR);
+                $stmt->bindparam(':description', $exit->description, PDO::PARAM_STR);
+                $stmt->bindparam(':keyword', $exit->keyword, PDO::PARAM_STR);
+                $stmt->bindparam(':lock_vnum', $exit->locks, PDO::PARAM_STR);
+
+                $stmt->execute() or die(print_r($stmt->errorInfo(), true) . $str . print_r($obj, true));
+            }
+
+        printf('inserting %s' . PHP_EOL, $obj->name);
+    }
+}
+
+function save_mobs($mobs, $pdo) {
+
+    foreach ($mobs as $obj) {
+        $str = 'INSERT INTO mob VALUES (
+            :vnum, :name, :short, :long, :descr,
+            :act, :affected_by, :alignment, :level,
+            :hitroll, :ac, :gold, :script
+        );';
+
+        $stmt = $pdo->prepare($str); /* @var $stmt PDOStatement */
+        $stmt->bindparam(':vnum', $obj->vnum, PDO::PARAM_INT);
+        $stmt->bindparam(':name', $obj->name, PDO::PARAM_STR);
+        $stmt->bindparam(':short', $obj->short_descr, PDO::PARAM_STR);
+        $stmt->bindparam(':long', $obj->long_descr, PDO::PARAM_STR);
+        $stmt->bindparam(':descr', $obj->description, PDO::PARAM_STR);
+
+        $stmt->bindparam(':act', $obj->act, PDO::PARAM_INT);
+        $stmt->bindparam(':affected_by', $obj->affected_by, PDO::PARAM_INT);
+        $stmt->bindparam(':alignment', $obj->alignment, PDO::PARAM_INT);
+        $stmt->bindparam(':level', $obj->level, PDO::PARAM_INT);
+
+        $stmt->bindparam(':hitroll', $obj->hitroll, PDO::PARAM_INT);
+        $stmt->bindparam(':ac', $obj->ac, PDO::PARAM_INT);
+        $stmt->bindparam(':gold', $obj->gold, PDO::PARAM_INT);
+        $stmt->bindparam(':script', $obj->script, PDO::PARAM_INT);
+
+        $stmt->execute() or die(print_r($stmt->errorInfo(), true) . $str . print_r($obj, true));
+
+        printf('inserting %s' . PHP_EOL, $obj->name);
+    }
+}
+
+function dump_area($area) {
+    global $pdo; // @var $pdo PDO
+
+    if (!file_exists($area)) {
+        echo $area . ' file does not exist';
+        return;
+    }
+    $fp = fopen($area, 'r');
+    if ($fp == null)
+        die('can not open file');
+
+    $area = load_area($fp);
+    //save_objs($area['objs'], $pdo);
+    //save_mobs($area['mobs'], $pdo);
+    save_rooms($area['rooms'], $pdo);
+
+    fclose($fp);
 }

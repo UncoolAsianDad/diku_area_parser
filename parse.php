@@ -22,14 +22,20 @@ include_once("db.php");
             return;
         }
 
-        $stmt = $pdo->prepare('delete from objs');
+        $stmt = $pdo->prepare('delete from object');
         $stmt->execute() or die($stmt->errorCode());
 
-        $stmt = $pdo->prepare('delete from objs_affects');
+        $stmt = $pdo->prepare('delete from object_affects');
+        $stmt->execute() or die($stmt->errorCode());
+
+        $stmt = $pdo->prepare('delete from room');
+        $stmt->execute() or die($stmt->errorCode());
+
+        $stmt = $pdo->prepare('delete from room_exits');
         $stmt->execute() or die($stmt->errorCode());
 
         $dir = dirname($area) . '\\';
-        dump_area($dir . 'mahntor.are');
+        dump_area($dir . 'limbo.are');
         return;
 
         $areas = file($area);
