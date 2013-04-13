@@ -10,7 +10,7 @@ Target Server Type    : MYSQL
 Target Server Version : 50527
 File Encoding         : 65001
 
-Date: 2013-04-12 16:43:58
+Date: 2013-04-12 20:40:05
 */
 
 SET FOREIGN_KEY_CHECKS=0;
@@ -34,6 +34,66 @@ CREATE TABLE `mob` (
 `gold`  int(11) NOT NULL ,
 `script`  varchar(255) CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT NULL ,
 PRIMARY KEY (`vnum`)
+)
+ENGINE=InnoDB
+DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
+
+;
+
+-- ----------------------------
+-- Table structure for `mob_in_room`
+-- ----------------------------
+DROP TABLE IF EXISTS `mob_in_room`;
+CREATE TABLE `mob_in_room` (
+`command`  char(1) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL ,
+`mob_vnum`  int(11) NOT NULL ,
+`arg2`  int(11) NOT NULL ,
+`room_vnum`  int(11) NOT NULL 
+)
+ENGINE=InnoDB
+DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
+
+;
+
+-- ----------------------------
+-- Table structure for `obj_in_mob_equip`
+-- ----------------------------
+DROP TABLE IF EXISTS `obj_in_mob_equip`;
+CREATE TABLE `obj_in_mob_equip` (
+`command`  char(1) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL ,
+`obj_vnum`  int(11) NOT NULL ,
+`mob_vnum`  int(11) NOT NULL ,
+`location`  enum('finger_l','finger_r','neck_1','neck_2','body','head','legs','feet','hands','arms','wield_l','about','waist','wrist_l','wrist_r','wield','hold') CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL 
+)
+ENGINE=InnoDB
+DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
+
+;
+
+-- ----------------------------
+-- Table structure for `obj_in_obj`
+-- ----------------------------
+DROP TABLE IF EXISTS `obj_in_obj`;
+CREATE TABLE `obj_in_obj` (
+`command`  char(1) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL ,
+`obj_vnum`  int(11) NOT NULL ,
+`arg2`  int(11) NOT NULL ,
+`container_vnum`  int(11) NOT NULL 
+)
+ENGINE=InnoDB
+DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
+
+;
+
+-- ----------------------------
+-- Table structure for `obj_in_room`
+-- ----------------------------
+DROP TABLE IF EXISTS `obj_in_room`;
+CREATE TABLE `obj_in_room` (
+`command`  char(1) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL ,
+`obj_vnum`  int(11) NOT NULL ,
+`arg2`  int(11) NOT NULL ,
+`room_vnum`  int(11) NOT NULL 
 )
 ENGINE=InnoDB
 DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
@@ -96,6 +156,21 @@ DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
 ;
 
 -- ----------------------------
+-- Table structure for `resets`
+-- ----------------------------
+DROP TABLE IF EXISTS `resets`;
+CREATE TABLE `resets` (
+`command`  char(1) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL ,
+`arg1`  int(11) NOT NULL ,
+`arg2`  int(11) NOT NULL ,
+`arg3`  int(11) NOT NULL 
+)
+ENGINE=InnoDB
+DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
+
+;
+
+-- ----------------------------
 -- Table structure for `room`
 -- ----------------------------
 DROP TABLE IF EXISTS `room`;
@@ -131,10 +206,22 @@ DEFAULT CHARACTER SET=utf8 COLLATE=utf8_general_ci
 ;
 
 -- ----------------------------
+-- View structure for `v_mob_in_room`
+-- ----------------------------
+DROP VIEW IF EXISTS `v_mob_in_room`;
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_mob_in_room` AS select `mob`.`player_name` AS `player_name`,`room`.`name` AS `name` from ((`mob_in_room` join `mob` on((`mob_in_room`.`mob_vnum` = `mob`.`vnum`))) join `room` on((`room`.`vnum` = `mob_in_room`.`room_vnum`)));
+
+-- ----------------------------
 -- View structure for `v_objects`
 -- ----------------------------
 DROP VIEW IF EXISTS `v_objects`;
-CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_objects` AS select `la`.`objs`.`vnum` AS `vnum`,`la`.`objs`.`name` AS `name`,`la`.`objs`.`short_descr` AS `short_descr`,`la`.`objs`.`description` AS `description`,`la`.`objs`.`item_type` AS `item_type`,`la`.`objs`.`extra_flags` AS `extra_flags`,`la`.`objs`.`wear_flag` AS `wear_flag`,`la`.`objs`.`v0` AS `v0`,`la`.`objs`.`v1` AS `v1`,`la`.`objs`.`v2` AS `v2`,`la`.`objs`.`v3` AS `v3`,`la`.`objs`.`weight` AS `weight`,`la`.`objs`.`cost` AS `cost`,`la`.`objs_affects`.`flag` AS `flag`,`la`.`objs_affects`.`modifier` AS `modifier` from (`objs` left join `objs_affects` on((`la`.`objs_affects`.`obj_vnum` = `la`.`objs`.`vnum`)));
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_objects` AS select `object`.`vnum` AS `vnum`,`object`.`name` AS `name`,`object`.`short_descr` AS `short_descr`,`object`.`description` AS `description`,`object`.`item_type` AS `item_type`,`object`.`extra_flags` AS `extra_flags`,`object`.`wear_flag` AS `wear_flag`,`object`.`v0` AS `v0`,`object`.`v1` AS `v1`,`object`.`v2` AS `v2`,`object`.`v3` AS `v3`,`object`.`weight` AS `weight`,`object`.`cost` AS `cost`,`object_affects`.`flag` AS `flag`,`object_affects`.`modifier` AS `modifier` from (`object` join `object_affects` on((`object_affects`.`obj_vnum` = `object`.`vnum`)));
+
+-- ----------------------------
+-- View structure for `view_obj_on_mob`
+-- ----------------------------
+DROP VIEW IF EXISTS `view_obj_on_mob`;
+CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `view_obj_on_mob` AS select `mob`.`player_name` AS `player_name`,`mob`.`level` AS `level`,`obj_in_mob_equip`.`location` AS `location`,`obj_in_mob_equip`.`mob_vnum` AS `mob_vnum`,`object`.`vnum` AS `vnum`,`object`.`name` AS `name`,`object`.`short_descr` AS `short_descr`,`object`.`description` AS `description`,`object`.`item_type` AS `item_type`,`object`.`extra_flags` AS `extra_flags`,`object`.`wear_flag` AS `wear_flag`,`object`.`v0` AS `v0`,`object`.`v1` AS `v1`,`object`.`v2` AS `v2`,`object`.`v3` AS `v3`,`object`.`weight` AS `weight`,`object`.`cost` AS `cost`,`object_affects`.`flag` AS `flag`,`object_affects`.`modifier` AS `modifier` from (((`obj_in_mob_equip` join `object` on((`obj_in_mob_equip`.`obj_vnum` = `object`.`vnum`))) join `mob` on((`mob`.`vnum` = `obj_in_mob_equip`.`mob_vnum`))) join `object_affects` on((`object_affects`.`obj_vnum` = `object`.`vnum`)));
 
 -- ----------------------------
 -- Indexes structure for table object_affects

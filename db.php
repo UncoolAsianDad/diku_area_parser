@@ -1,7 +1,30 @@
 <?php
 
+class areadata {
+
+    var $data;
+    var $mobs;
+    var $objs;
+    var $rooms;
+    var $specials;
+    var $resets;
+    var $shops;
+
+    function __construct() {
+        $this->data     = array();
+        $this->mobs     = array();
+        $this->objs     = array();
+        $this->rooms    = array();
+        $this->specials = array();
+        $this->resets   = array();
+        $this->shops    = array();
+    }
+
+}
+
 function load_area($fp) {
 
+    $area = new areadata();
     do {
         $c = fgetc($fp);
         if ($c === false)
@@ -17,34 +40,29 @@ function load_area($fp) {
             //var_dump($word);
             switch ($word) {
                 case 'AREADATA':
-                    $areadata = load_areadata($fp);
+                    $area->data     = load_areadata($fp);
                     break;
                 case 'MOBILES':
-                    $mobs     = load_mobs($fp);
+                    $area->mobs     = load_mobs($fp);
                     break;
                 case 'OBJECTS':
-                    $objs     = load_objs($fp);
+                    $area->objs     = load_objs($fp);
                     break;
                 case 'ROOMS':
-                    $rooms    = load_rooms($fp);
+                    $area->rooms    = load_rooms($fp);
                     break;
                 case 'SPECIALS':
-                    $specials = load_specials($fp);
+                    $area->specials = load_specials($fp);
                     break;
                 case 'RESETS':
-                    $resets   = load_resets($fp);
+                    $area->resets   = load_resets($fp);
                     break;
                 case 'SHOPS':
-                    $shops    = load_shops($fp);
+                    $area->shops    = load_shops($fp);
                     break;
             }
         }
     } while ($c <> '$' || !feof($fp));
-
-    $area          = array();
-    $area['objs']  = $objs;
-    $area['mobs']  = $mobs;
-    $area['rooms'] = $rooms;
 
     return $area;
 }
@@ -83,17 +101,17 @@ function is_number($c) {
 
 function fread_eol($fp) {
     $buf = '';
-
+    /*
+      do {
+      $c = fgetc($fp);
+      } while (isspace($c) && !feof($fp));
+     */
     do {
         $c = fgetc($fp);
-    } while (isspace($c) && !feof($fp));
-
-    while ($c <> "\n" && $fp) {
         $buf .= $c;
-        $c = fgetc($fp);
-    }
+    } while ($c <> "\n");
 
-    return $buf;
+    return trim($buf);
 }
 
 function fread_string($fp) {
@@ -379,11 +397,38 @@ function load_rooms($fp) {
     return $rooms;
 }
 
-function load_specials($fp) {
-    // todo
+function load_resets($fp) {
+
+    $resets = array();
+
+    for (;;) {
+        $letter = fread_letter($fp);
+
+        if ($letter == 'S')
+            break;
+
+        if ($letter == '*') {
+            fread_eol($fp);
+            continue;
+        }
+
+        $reset          = new stdClass();
+        $reset->command = $letter;
+
+        fread_number($fp);
+        $reset->arg1 = fread_number($fp);
+        $reset->arg2 = fread_number($fp);
+        $reset->arg3 = ($letter == 'G' || $letter == 'R') ? 0 : fread_number($fp);
+
+        fread_eol($fp);
+
+        $resets[] = $reset;
+    }
+
+    return $resets;
 }
 
-function load_resets($fp) {
+function load_specials($fp) {
     // todo
 }
 
@@ -421,19 +466,18 @@ function save_objs($objs, $pdo) {
         $stmt->bindparam(':v2', $obj->values[2], PDO::PARAM_STR);
         $stmt->bindparam(':v3', $obj->values[3], PDO::PARAM_STR);
 
-        $stmt->execute() or die($str . print_r($obj, true));
-
+        $stmt->execute() or die(print_r($stmt->errorInfo(), true) . $str . print_r($obj, true));
 
         if (isset($obj->extra_desc))
             foreach ($obj->extra_desc as $a) {
-                $stmt = $pdo->prepare('INSERT INTO object_eds
+                $stmt = $pdo->prepare('INSERT INTO object_ed
                         (obj_vnum, keyword, description)
                         VALUES
                         (:obj_vnum, :keyword, :description);');
                 $stmt->bindParam('obj_vnum', $obj->vnum, PDO::PARAM_INT);
                 $stmt->bindParam('keyword', $a->keyword, PDO::PARAM_STR);
                 $stmt->bindParam('description', $a->description, PDO::PARAM_STR);
-                $stmt->execute() or die($str . print_r($obj, true));
+                $stmt->execute() or die(print_r($stmt->errorInfo(), true) . $str . print_r($obj, true));
             }
 
         if (isset($obj->affected))
@@ -445,7 +489,8 @@ function save_objs($objs, $pdo) {
                 $stmt->bindParam(':obj_vnum', $obj->vnum, PDO::PARAM_INT);
                 $stmt->bindParam(':flag', $a->affect_type, PDO::PARAM_INT);
                 $stmt->bindParam(':modifier', $a->modifier, PDO::PARAM_INT);
-                $stmt->execute() or die($str . print_r($obj, true));
+
+                $stmt->execute() or die(print_r($stmt->errorInfo(), true) . $str . print_r($obj, true));
             }
 
         printf('inserting %s' . PHP_EOL, $obj->name);
@@ -524,6 +569,35 @@ function save_mobs($mobs, $pdo) {
     }
 }
 
+function save_resets($resets, $pdo) {
+
+    foreach ($resets as $obj) {
+
+        if ($obj->command == 'M') {
+            $tbl_name = 'mob_in_room';
+            $mob      = $obj->arg1;
+        } else if ($obj->command == 'O') {
+            $tbl_name = 'obj_in_room';
+        } else if ($obj->command == 'P') {
+            $tbl_name = 'obj_in_obj';
+        } else if (in_array($obj->command, array('E', 'G'))) {
+            $obj->arg2 = $mob;
+            $tbl_name  = 'obj_in_mob_equip';
+        } else {
+            $tbl_name = 'resets';
+        }
+        $str  = 'INSERT INTO ' . $tbl_name . ' VALUES ( :command, :arg1, :arg2, :arg3 );';
+        $stmt = $pdo->prepare($str); /* @var $stmt PDOStatement */
+        $stmt->bindparam(':command', $obj->command, PDO::PARAM_STR);
+        $stmt->bindparam(':arg1', $obj->arg1, PDO::PARAM_INT);
+        $stmt->bindparam(':arg2', $obj->arg2, PDO::PARAM_INT);
+        $stmt->bindparam(':arg3', $obj->arg3, PDO::PARAM_INT);
+        $stmt->execute() or die(print_r($stmt->errorInfo(), true) . $str . print_r($obj, true));
+
+//        printf('inserting %s' . PHP_EOL, $obj->name);
+    }
+}
+
 function dump_area($area) {
     global $pdo; // @var $pdo PDO
 
@@ -536,9 +610,10 @@ function dump_area($area) {
         die('can not open file');
 
     $area = load_area($fp);
-    //save_objs($area['objs'], $pdo);
-    //save_mobs($area['mobs'], $pdo);
-    save_rooms($area['rooms'], $pdo);
+    save_mobs($area->mobs, $pdo);
+    save_objs($area->objs, $pdo);
+    save_rooms($area->rooms, $pdo);
+    save_resets($area->resets, $pdo);
 
     fclose($fp);
 }
