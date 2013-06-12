@@ -1,5 +1,7 @@
 <?php
 
+$lastC = ' ';
+
 class areadata {
 
     var $data;
@@ -20,6 +22,29 @@ class areadata {
         $this->shops    = array();
     }
 
+}
+
+function emptyTables() {
+    global $pdo;
+
+    $tables = array(
+        'mob_in_room',
+        'obj_in_room',
+        'obj_in_mob_equip',
+        'obj_in_obj',
+        'object_affects',
+        'object_ed',
+        'resets',
+        'room_exits',
+        'mob',
+        'object',
+        'room',
+    );
+
+    foreach ($tables as $table) {
+        $sql = "truncate $table;";
+        $pdo->exec($sql);
+    }
 }
 
 function load_area($fp) {
@@ -73,23 +98,25 @@ function load_area($fp) {
  *
  */
 // Helper Functions
-function fread_letter($fp) {
+function fread_letter($fp, $echo = false) {
+    global $lastC;
 
-    do {
+    $c = $lastC;
+
+    while (isspace($c)) {
         $c = fgetc($fp);
-    } while (isspace($c));
+    }
 
     return $c;
 }
 
-function isspace($c) {
+function isspace($c, $echo = false) {
 
-    if ($c == ' ' ||
-            $c == "\t" ||
-            $c == "\r" ||
-            $c == "\n")
+    if ($echo)
+        var_dump($c);
+
+    if (in_array($c, array(' ', "\t", "\r", "\n")))
         return true;
-
     return false;
 }
 
@@ -145,30 +172,41 @@ function fread_word($fp) {
 }
 
 function fread_number($fp) {
-    $buf = '';
 
-    do {
-        $c = fgetc($fp);
-    } while (isspace($c) && !feof($fp));
+    global $lastC;
 
+    $buf  = '';
     $sign = false;
+
+    // skip out whitespaces
+    do
+        $c = fgetc($fp); while (isspace($c));
+
+    // if we have a sign
     if ($c == '+')
-        $c    = fgetc($fp);
+        $c = fgetc($fp);
     else if ($c == '-') {
-        $sign = true;
         $c    = fgetc($fp);
+        $sign = true;
     }
 
-    while (is_number($c) && !feof($fp)) {
+    // get the rest of the words
+    while (is_number($c)) {
         $buf .= $c;
         $c = fgetc($fp);
     }
+
 
     if ($sign)
         $buf = 0 - $buf;
 
     if ($c == '|')
         $buf += fread_number($fp);
+
+    // end of read string, we should put the char back if it's not a number nor |
+    //fputs($fp, $c);
+
+    $lastC = $c;
 
     return (int) $buf;
 }
@@ -233,6 +271,8 @@ function load_mobs($fp) {
         $mob->act         = fread_number($fp);
         $mob->affected_by = fread_number($fp);
         $mob->alignment   = fread_number($fp);
+        //var_dump('align:'.$mob->alignment);
+
         fread_letter($fp);
 
         $mob->level   = fread_number($fp);
@@ -605,15 +645,17 @@ function dump_area($area) {
         echo $area . ' file does not exist';
         return;
     }
-    $fp = fopen($area, 'r');
+    $fp = fopen($area, 'r+');
     if ($fp == null)
         die('can not open file');
 
     $area = load_area($fp);
+
+//    var_dump($area->mobs);
+
     save_mobs($area->mobs, $pdo);
     save_objs($area->objs, $pdo);
     save_rooms($area->rooms, $pdo);
     save_resets($area->resets, $pdo);
-
     fclose($fp);
 }
